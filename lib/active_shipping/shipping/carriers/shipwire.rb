@@ -6,6 +6,10 @@ module ActiveMerchant
     class Shipwire < Carrier
       self.retry_safe = true
       
+      
+      INVENTORY_URL = 'https://www.shipwire.com/exec/InventoryServices.php'
+      INVENTORY_SCHEMA_URL = 'http://www.shipwire.com/exec/download/InventoryUpdate.dtd'
+      
       URL = 'https://www.shipwire.com/exec/RateServices.php'
       SCHEMA_URL = 'http://www.shipwire.com/exec/download/RateRequest.dtd'      
       WAREHOUSES = { 'CHI' => 'Chicago',
@@ -28,6 +32,21 @@ module ActiveMerchant
         commit(origin, destination, options)
       end
       
+      def inventory
+        xml = Builder::XmlMarkup.new
+        xml.instruct!
+        xml.declare! :DOCTYPE, :InventoryStatus, :SYSTEM, INVENTORY_SCHEMA_URL
+        xml.tag! 'InventoryUpdate' do
+          add_credentials(xml)
+          xml.tag! 'Server', 'test'
+          xml.tag! 'Warehouse'
+          xml.tag! 'ProductCode'
+        end
+        x = xml.target!
+        post = ssl_post(INVENTORY_URL, "InventoryUpdateXML=#{CGI.escape(x)}")
+        response = parse_inventory( post )
+      end
+      
       def valid_credentials?
         location = self.class.default_location
         find_rates(location, location, Package.new(100, [5,15,30]),
@@ -41,6 +60,7 @@ module ActiveMerchant
       def requirements
         REQUIRED_OPTIONS
       end
+    
       
       def build_request(destination, options)
         xml = Builder::XmlMarkup.new
@@ -115,6 +135,30 @@ module ActiveMerchant
       
       def carrier_for(service)
         CARRIERS.dup.find{ |carrier| service.to_s =~ /^#{carrier}/i } || service.to_s.split(" ").first
+      end
+
+      def parse_inventory(xml)
+        response = {}
+        response["products"] = []
+        document = REXML::Document.new(xml)
+        response["status"] = parse_child_text(document.root, "Status")
+        document.root.elements.each("Product") do |e|
+          product = {}
+          product["code"] = e.attributes["code"]
+          product["quantity"] = e.attributes["quantity"]
+          product["pending"] = e.attributes["pending"]
+          product["good"] = e.attributes["good"]
+          product["backordered"] = e.attributes["backordered"]
+          product["reserved"] = e.attributes["reserved"]
+          product["shipping"] = e.attributes["shipping"]
+          product["shipped"] = e.attributes["shipped"]
+          product["consuming"] = e.attributes["consuming"]
+          product["creating"] = e.attributes["creating"]
+          product["consumed"] = e.attributes["consumed"]
+          product["created"] = e.attributes["created"]
+          response["products"] << product
+        end
+        response
       end
 
       def parse(xml)
