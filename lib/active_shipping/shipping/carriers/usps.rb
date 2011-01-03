@@ -308,7 +308,7 @@ module ActiveMerchant
         domestic_elements = ['Postage', 'CLASSID', 'MailService', 'Rate']
         international_elements = ['Service', 'ID', 'SvcDescription', 'Postage']
         service_node, service_code_node, service_name_node, rate_node = domestic ? domestic_elements : international_elements
-        
+        service_name.gsub!(/&amp;lt;sup&amp;gt;&amp;amp;reg;&amp;lt;\/sup&amp;gt;/, '')
         root_node.each_element('Package') do |package_node|
           package_index = package_node.attributes['ID'].to_i
           
@@ -355,7 +355,7 @@ module ActiveMerchant
                       :height => 0.75)
         elsif service_node.elements['MailService'] # domestic non-flat rates
           return true
-        else #international non-flat rates
+        else #international non-flat ratesse
           # Some sample english that this is required to parse:
           #
           # 'Max. length 46", width 35", height 46" and max. length plus girth 108"'
